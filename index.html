@@ -15,6 +15,7 @@
     th { font-size: 13px; color: #374151; }
     .btns { display: flex; gap: 10px; margin: 12px 0; flex-wrap: wrap; }
     button { padding: 10px 14px; font-size: 14px; cursor: pointer; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
     .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-top: 14px; }
     .big { font-size: 36px; font-weight: 800; }
     .muted { color: #6b7280; }
@@ -25,6 +26,7 @@
     .pill.in { background: #dcfce7; color: #14532d; }
     .right { text-align: right; }
     .small { font-size: 12px; }
+    .hint { font-size: 12px; color: #6b7280; margin-top: 6px; }
   </style>
 </head>
 
@@ -37,11 +39,12 @@
       <div>
         <label for="school">School</label>
         <select id="school"></select>
+        <div class="hint">Select a school to load instructional minutes.</div>
       </div>
       <div>
         <label for="grade">Grade</label>
         <select id="grade">
-          <option value="">Select grade...</option>
+          <option value="">Select grade…</option>
           <option value="TK">TK</option>
           <option value="K">K</option>
           <option value="1">1</option>
@@ -53,17 +56,18 @@
           <option value="7">7</option>
           <option value="8">8</option>
         </select>
+        <div class="hint">Grade determines band (Lower/Upper/All).</div>
       </div>
     </div>
 
     <div class="row">
       <div>
         <label>Grade Band</label>
-        <div id="band" class="muted"></div>
+        <div id="band" class="muted">—</div>
       </div>
       <div>
         <label>Weekly Instructional Minutes</label>
-        <div id="weeklyInstr" class="muted"></div>
+        <div id="weeklyInstr" class="muted">—</div>
       </div>
     </div>
 
@@ -100,7 +104,6 @@
 <script>
 /** ====== CONFIG DATA (edit here) ====== **/
 
-// Service codes (dropdown)
 const serviceCodes = [
   "210-Family training, counseling, and home visits",
   "220-Medical services (for evaluation only)",
@@ -141,7 +144,6 @@ const serviceCodes = [
   "900-Other special education/related services"
 ];
 
-// School instructional minutes table
 // Key: `${school}|${band}` band = Lower / Upper / All
 const weeklyMinutesBySchoolBand = {
   "Courreges|Lower": 1412,
@@ -163,7 +165,6 @@ const weeklyMinutesBySchoolBand = {
   "Tamura|Upper": 1575,
 };
 
-// Location mapping: Location text -> "Inside" or "Outside"
 const locationInsideOutside = {
   "205-Home/Community Based (infants/preschool)": "Outside",
   "210-Home": "Outside",
@@ -194,7 +195,6 @@ const locationInsideOutside = {
   "890-Service Provider Location": "Outside",
 };
 
-// Frequency conversion to weekly minutes
 const freqToWeekly = (mins, freq) => {
   const m = Number(mins);
   if (!Number.isFinite(m) || m < 0) return 0;
@@ -218,11 +218,19 @@ const elMsg = document.getElementById("message");
 const elPct = document.getElementById("genEdPct");
 const elBreakdown = document.getElementById("breakdown");
 
+const btnAddRow = document.getElementById("addRow");
+const btnClear = document.getElementById("clear");
+const btnCopy = document.getElementById("copy");
+
 const uniqueSchools = [...new Set(Object.keys(weeklyMinutesBySchoolBand).map(k => k.split("|")[0]))].sort();
+
+// Add blank "Select school..." option first
 const blankSchool = document.createElement("option");
 blankSchool.value = "";
-blankSchool.textContent = "Select school...";
+blankSchool.textContent = "Select school…";
 elSchool.appendChild(blankSchool);
+
+// Then add actual schools
 for (const s of uniqueSchools) {
   const opt = document.createElement("option");
   opt.value = s; opt.textContent = s;
@@ -233,19 +241,23 @@ const locationOptions = Object.keys(locationInsideOutside);
 const serviceOptions = serviceCodes;
 
 function gradeToBand(g) {
+  if (!g) return "";
   if (g === "TK" || g === "K") return "Lower";
   const n = Number(g);
   if (Number.isFinite(n)) {
     if (n <= 2) return "Lower";
     if (n <= 5) return "Upper";
-    return "All"; // 6-8
+    return "All";
   }
-  return "All";
+  return "";
 }
 
 function getWeeklyInstr() {
   const school = elSchool.value;
-  const band = gradeToBand(elGrade.value);
+  const grade = elGrade.value;
+  if (!school || !grade) return null;
+  const band = gradeToBand(grade);
+  if (!band) return null;
   const key = `${school}|${band}`;
   return weeklyMinutesBySchoolBand[key] ?? null;
 }
@@ -271,9 +283,10 @@ function addServiceRow(initial = {}) {
   // Location select
   const tdLoc = document.createElement("td");
   const selLoc = document.createElement("select");
-  const blank = document.createElement("option");
-  blank.value = ""; blank.textContent = "Select location…";
-  selLoc.appendChild(blank);
+  const blankLoc = document.createElement("option");
+  blankLoc.value = "";
+  blankLoc.textContent = "Select location…";
+  selLoc.appendChild(blankLoc);
   for (const loc of locationOptions) {
     const opt = document.createElement("option");
     opt.value = loc; opt.textContent = loc;
@@ -347,12 +360,30 @@ function addServiceRow(initial = {}) {
   updateRow();
 }
 
+function setButtonsEnabled(enabled) {
+  btnAddRow.disabled = !enabled;
+  btnCopy.disabled = !enabled; // copying summary is still okay without school/grade, but keeping consistent
+}
+
 function recalc() {
-  const band = gradeToBand(elGrade.value);
-  elBand.textContent = band;
+  const grade = elGrade.value;
+  const band = gradeToBand(grade);
+
+  elBand.textContent = band || "—";
 
   const weeklyInstr = getWeeklyInstr();
-  elWeekly.textContent = weeklyInstr == null ? "— (no match for school + band)" : weeklyInstr;
+  if (weeklyInstr == null) {
+    elWeekly.textContent = "—";
+  } else {
+    elWeekly.textContent = weeklyInstr;
+  }
+
+  // If school/grade not selected yet, show placeholders and skip warnings/percent
+  const schoolReady = Boolean(elSchool.value);
+  const gradeReady = Boolean(elGrade.value);
+  const ready = schoolReady && gradeReady && weeklyInstr != null;
+
+  setButtonsEnabled(true); // keep add-row available even before selection (change to `ready` if you want)
 
   // Sum totals
   let totalWeekly = 0;
@@ -360,7 +391,6 @@ function recalc() {
 
   [...elServices.querySelectorAll("tr")].forEach(tr => {
     const selects = tr.querySelectorAll("select");
-    const selSvc = selects[0];
     const selLoc = selects[1];
     const loc = selLoc?.value ?? "";
     const status = loc ? (locationInsideOutside[loc] ?? "") : "";
@@ -370,29 +400,30 @@ function recalc() {
 
     totalWeekly += wk;
     if (status === "Outside") outsideWeekly += wk;
-
-    // (Optional) you can enforce service code required later:
-    // const svc = selSvc?.value ?? "";
   });
 
-  // Warning: total service minutes exceed instructional minutes
+  // Messages
   elMsg.innerHTML = "";
-  if (weeklyInstr != null && totalWeekly > weeklyInstr) {
+  if (ready && totalWeekly > weeklyInstr) {
     const div = document.createElement("div");
     div.className = "warn";
     div.textContent = "WARNING TOTAL: SERVICE MINUTES EXCEED INSTRUCTIONAL MINUTES AT SCHOOL!";
     elMsg.appendChild(div);
-  } else if (weeklyInstr != null && totalWeekly > 0) {
+  } else if (ready && totalWeekly > 0) {
     const div = document.createElement("div");
     div.className = "ok";
     div.textContent = "Totals look valid.";
     elMsg.appendChild(div);
+  } else if (!schoolReady || !gradeReady) {
+    // no message until they select school + grade
   }
 
   // Gen Ed %
-  if (weeklyInstr == null || weeklyInstr === 0) {
+  if (!ready || weeklyInstr === 0) {
     elPct.textContent = "—";
-    elBreakdown.textContent = "";
+    elBreakdown.textContent = (!schoolReady || !gradeReady)
+      ? "Select a school and grade to calculate Gen Ed %."
+      : "";
     return;
   }
 
@@ -404,21 +435,25 @@ function recalc() {
     `Instructional weekly mins: ${weeklyInstr}`;
 }
 
-document.getElementById("addRow").addEventListener("click", () => addServiceRow());
+btnAddRow.addEventListener("click", () => addServiceRow());
 
-document.getElementById("clear").addEventListener("click", () => {
-  elGrade.value = "";
+btnClear.addEventListener("click", () => {
+  // Reset school/grade to blank
   elSchool.value = "";
+  elGrade.value = "";
+
+  // Clear service rows and add a couple blank ones
   elServices.innerHTML = "";
   addServiceRow();
   addServiceRow();
+
   recalc();
 });
 
-document.getElementById("copy").addEventListener("click", async () => {
-  const school = elSchool.value;
-  const grade = elGrade.value;
-  const band = gradeToBand(grade);
+btnCopy.addEventListener("click", async () => {
+  const school = elSchool.value || "(not selected)";
+  const grade = elGrade.value || "(not selected)";
+  const band = gradeToBand(elGrade.value) || "(not selected)";
   const weeklyInstr = getWeeklyInstr();
   const pct = elPct.textContent;
 
@@ -455,8 +490,9 @@ ${lines.length ? lines.join("\n") : "(none)"}\n`;
 elSchool.addEventListener("change", recalc);
 elGrade.addEventListener("change", recalc);
 
-// init
-elSchool.value = uniqueSchools[0] ?? "";
+// init: start blank school + blank grade
+elSchool.value = "";
+elGrade.value = "";
 addServiceRow();
 addServiceRow();
 recalc();
