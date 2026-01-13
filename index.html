@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gen Ed % Calculator</title>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 1100px; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 1200px; }
     h1 { margin: 0 0 12px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
     label { font-weight: 600; display: block; margin-bottom: 6px; }
@@ -13,19 +13,21 @@
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: middle; }
     th { font-size: 13px; color: #374151; }
-    .btns { display: flex; gap: 10px; margin: 12px 0; }
+    .btns { display: flex; gap: 10px; margin: 12px 0; flex-wrap: wrap; }
     button { padding: 10px 14px; font-size: 14px; cursor: pointer; }
     .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-top: 14px; }
     .big { font-size: 36px; font-weight: 800; }
     .muted { color: #6b7280; }
-    .warn { background: #fee2e2; border: 1px solid #ef4444; color: #7f1d1d; padding: 12px; border-radius: 12px; margin-top: 12px; font-weight: 700; }
+    .warn { background: #fee2e2; border: 1px solid #ef4444; color: #7f1d1d; padding: 12px; border-radius: 12px; margin-top: 12px; font-weight: 800; }
     .ok { background: #ecfeff; border: 1px solid #06b6d4; color: #164e63; padding: 12px; border-radius: 12px; margin-top: 12px; font-weight: 700; }
-    .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
     .pill.out { background: #fee2e2; color: #7f1d1d; }
     .pill.in { background: #dcfce7; color: #14532d; }
     .right { text-align: right; }
+    .small { font-size: 12px; }
   </style>
 </head>
+
 <body>
   <h1>Gen Ed Participation % Calculator</h1>
   <div class="muted">Static, client-side calculator (no student identifiers, no storage).</div>
@@ -73,10 +75,11 @@
     <table>
       <thead>
         <tr>
-          <th style="width:42%">Location</th>
-          <th style="width:14%">Inside/Outside</th>
-          <th style="width:14%">Duration (mins)</th>
-          <th style="width:14%">Frequency</th>
+          <th style="width:26%">Service Code</th>
+          <th style="width:30%">Location</th>
+          <th style="width:10%">In/Out</th>
+          <th style="width:10%">Duration</th>
+          <th style="width:12%">Frequency</th>
           <th class="right" style="width:12%">Weekly mins</th>
           <th style="width:4%"></th>
         </tr>
@@ -89,12 +92,53 @@
     <div class="card" style="margin-top:16px;">
       <div class="muted">Gen Ed Participation</div>
       <div class="big" id="genEdPct">—</div>
-      <div class="muted" id="breakdown"></div>
+      <div class="muted small" id="breakdown"></div>
     </div>
   </div>
 
 <script>
 /** ====== CONFIG DATA (edit here) ====== **/
+
+// Service codes (dropdown)
+const serviceCodes = [
+  "210-Family training, counseling, and home visits",
+  "220-Medical services (for evaluation only)",
+  "230-Nutrition Services",
+  "240-Service Coordination",
+  "250-Special Instruction",
+  "260-SpEd aide in reg. development class child care center/family child care home",
+  "270-Respite Care services",
+  "340-Intensive Individual Services",
+  "415-Language and Speech",
+  "425-Adapted Physical Education",
+  "435-Health and nursing-specialized physical health care services",
+  "436-Health and nursing - other services",
+  "445-Assistive technology services",
+  "450-Occupational therapy",
+  "460-Physical Therapy",
+  "510-Individual counseling",
+  "515-Counseling and guidance",
+  "520-Parent counseling",
+  "525-Social work services",
+  "535-Behavior Intervention Services",
+  "540-Day treatment services",
+  "545-Residential Treatment services",
+  "610-Specialized services for low incidence disabilities",
+  "710-Specialized deaf and hard of hearing services",
+  "715-Interpreter services",
+  "720-Audiological services",
+  "760-Recreation services, includes therapeutic recreation",
+  "820-College Awareness",
+  "830-Vocational assessment, counseling, guidance, and career assessment",
+  "840-Career awareness",
+  "850-Work experience education",
+  "855-Job coaching (includes job shadow and service learning)",
+  "860-Mentoring",
+  "865-Agency linkages (referral and placement)",
+  "870-Travel training (includes mobility training)",
+  "890-Other transition service",
+  "900-Other special education/related services"
+];
 
 // School instructional minutes table
 // Key: `${school}|${band}` band = Lower / Upper / All
@@ -149,6 +193,7 @@ const locationInsideOutside = {
   "890-Service Provider Location": "Outside",
 };
 
+// Frequency conversion to weekly minutes
 const freqToWeekly = (mins, freq) => {
   const m = Number(mins);
   if (!Number.isFinite(m) || m < 0) return 0;
@@ -180,6 +225,7 @@ for (const s of uniqueSchools) {
 }
 
 const locationOptions = Object.keys(locationInsideOutside);
+const serviceOptions = serviceCodes;
 
 function gradeToBand(g) {
   if (g === "TK" || g === "K") return "Lower";
@@ -201,6 +247,21 @@ function getWeeklyInstr() {
 
 function addServiceRow(initial = {}) {
   const tr = document.createElement("tr");
+
+  // Service Code select
+  const tdSvc = document.createElement("td");
+  const selSvc = document.createElement("select");
+  const blankSvc = document.createElement("option");
+  blankSvc.value = "";
+  blankSvc.textContent = "Select service…";
+  selSvc.appendChild(blankSvc);
+  for (const code of serviceOptions) {
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = code;
+    selSvc.appendChild(opt);
+  }
+  selSvc.value = initial.service ?? "";
+  tdSvc.appendChild(selSvc);
 
   // Location select
   const tdLoc = document.createElement("td");
@@ -255,7 +316,7 @@ function addServiceRow(initial = {}) {
   btnRm.title = "Remove row";
   tdRm.appendChild(btnRm);
 
-  tr.append(tdLoc, tdIO, tdDur, tdFreq, tdWk, tdRm);
+  tr.append(tdSvc, tdLoc, tdIO, tdDur, tdFreq, tdWk, tdRm);
   elServices.appendChild(tr);
 
   const updateRow = () => {
@@ -274,6 +335,7 @@ function addServiceRow(initial = {}) {
   selLoc.addEventListener("change", updateRow);
   inpDur.addEventListener("input", updateRow);
   selFreq.addEventListener("change", updateRow);
+  selSvc.addEventListener("change", recalc);
 
   btnRm.addEventListener("click", () => { tr.remove(); recalc(); });
 
@@ -292,17 +354,23 @@ function recalc() {
   let outsideWeekly = 0;
 
   [...elServices.querySelectorAll("tr")].forEach(tr => {
-    const loc = tr.querySelector("select")?.value ?? "";
+    const selects = tr.querySelectorAll("select");
+    const selSvc = selects[0];
+    const selLoc = selects[1];
+    const loc = selLoc?.value ?? "";
     const status = loc ? (locationInsideOutside[loc] ?? "") : "";
     const dur = tr.querySelector('input[type="number"]')?.value ?? "";
-    const freq = tr.querySelectorAll("select")[1]?.value ?? "Weekly";
+    const freq = selects[2]?.value ?? "Weekly";
     const wk = freqToWeekly(dur, freq);
 
     totalWeekly += wk;
     if (status === "Outside") outsideWeekly += wk;
+
+    // (Optional) you can enforce service code required later:
+    // const svc = selSvc?.value ?? "";
   });
 
-  // Warning
+  // Warning: total service minutes exceed instructional minutes
   elMsg.innerHTML = "";
   if (weeklyInstr != null && totalWeekly > weeklyInstr) {
     const div = document.createElement("div");
@@ -332,8 +400,8 @@ function recalc() {
 }
 
 document.getElementById("addRow").addEventListener("click", () => addServiceRow());
+
 document.getElementById("clear").addEventListener("click", () => {
-  // reset picks but keep defaults
   elGrade.value = "TK";
   elSchool.value = uniqueSchools[0] ?? "";
   elServices.innerHTML = "";
@@ -349,15 +417,16 @@ document.getElementById("copy").addEventListener("click", async () => {
   const weeklyInstr = getWeeklyInstr();
   const pct = elPct.textContent;
 
-  // Simple service summary lines
   const lines = [];
   [...elServices.querySelectorAll("tr")].forEach((tr, idx) => {
-    const loc = tr.querySelector("select")?.value ?? "";
+    const selects = tr.querySelectorAll("select");
+    const svc = selects[0]?.value ?? "";
+    const loc = selects[1]?.value ?? "";
     const status = loc ? (locationInsideOutside[loc] ?? "") : "";
     const dur = tr.querySelector('input[type="number"]')?.value ?? "";
-    const freq = tr.querySelectorAll("select")[1]?.value ?? "Weekly";
+    const freq = selects[2]?.value ?? "Weekly";
     const wk = tr.querySelector("td.right")?.textContent ?? "0";
-    if (loc || dur) lines.push(`${idx+1}. ${loc} (${status}) — ${dur} mins, ${freq} → ${wk} weekly`);
+    if (svc || loc || dur) lines.push(`${idx+1}. ${svc || "(no service)"} | ${loc || "(no location)"} (${status || "—"}) — ${dur || 0} mins, ${freq} → ${wk} weekly`);
   });
 
   const text =
