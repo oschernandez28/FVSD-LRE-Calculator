@@ -41,6 +41,7 @@
       <div>
         <label for="grade">Grade</label>
         <select id="grade">
+          <option value="">Select grade...</option>
           <option value="TK">TK</option>
           <option value="K">K</option>
           <option value="1">1</option>
@@ -218,6 +219,10 @@ const elPct = document.getElementById("genEdPct");
 const elBreakdown = document.getElementById("breakdown");
 
 const uniqueSchools = [...new Set(Object.keys(weeklyMinutesBySchoolBand).map(k => k.split("|")[0]))].sort();
+const blankSchool = document.createElement("option");
+blankSchool.value = "";
+blankSchool.textContent = "Select school...";
+elSchool.appendChild(blankSchool);
 for (const s of uniqueSchools) {
   const opt = document.createElement("option");
   opt.value = s; opt.textContent = s;
@@ -402,8 +407,8 @@ function recalc() {
 document.getElementById("addRow").addEventListener("click", () => addServiceRow());
 
 document.getElementById("clear").addEventListener("click", () => {
-  elGrade.value = "TK";
-  elSchool.value = uniqueSchools[0] ?? "";
+  elGrade.value = "";
+  elSchool.value = "";
   elServices.innerHTML = "";
   addServiceRow();
   addServiceRow();
