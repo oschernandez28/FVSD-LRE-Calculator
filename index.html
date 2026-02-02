@@ -39,7 +39,7 @@
       <div>
         <label for="school">School</label>
         <select id="school"></select>
-        <div class="hint">Select a school to load instructional minutes.</div>
+        <div class="hint">Select a school to load minute totals.</div>
       </div>
       <div>
         <label for="grade">Grade</label>
@@ -66,8 +66,19 @@
         <div id="band" class="muted">—</div>
       </div>
       <div>
-        <label>Weekly Instructional Minutes</label>
+        <label>Weekly Instructional Minutes (reference only)</label>
         <div id="weeklyInstr" class="muted">—</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Total School Minutes (NEW overall total)</label>
+        <div id="totalSchool" class="muted">—</div>
+      </div>
+      <div>
+        <label>Non-Instructional Minutes (counts as Gen Ed)</label>
+        <div id="nonInstr" class="muted">—</div>
       </div>
     </div>
 
@@ -146,24 +157,27 @@ const serviceCodes = [
 ];
 
 // Key: `${school}|${band}` band = Lower / Upper / All
-const weeklyMinutesBySchoolBand = {
-  "Courreges|Lower": 1412,
-  "Courreges|Upper": 1574,
-  "Cox|Lower": 1412,
-  "Cox|Upper": 1574,
-  "Fulton|All": 1595,
-  "Gisler|Lower": 1412,
-  "Gisler|Upper": 1574,
-  "Masuda|All": 1608,
-  "Newland|Lower": 1440,
-  "Newland|Upper": 1580,
-  "Oka|Lower": 1412,
-  "Oka|Upper": 1574,
-  "Plavan|Lower": 1413,
-  "Plavan|Upper": 1575,
-  "Talbert|All": 1595,
-  "Tamura|Lower": 1413,
-  "Tamura|Upper": 1575,
+// NOTE: calculations use `total` as the new overall total.
+// Non-instructional minutes are counted as Gen Ed participation time automatically
+// because we subtract ONLY Outside service minutes from Total School Minutes.
+const minutesBySchoolBand = {
+  "Courreges|Lower": { instr: 1412, nonInstr: 260, total: 1672 },
+  "Courreges|Upper": { instr: 1574, nonInstr: 260, total: 1834 },
+  "Cox|Lower": { instr: 1412, nonInstr: 235, total: 1647 },
+  "Cox|Upper": { instr: 1574, nonInstr: 235, total: 1809 },
+  "Fulton|All": { instr: 1595, nonInstr: 254, total: 1849 },
+  "Gisler|Lower": { instr: 1412, nonInstr: 260, total: 1672 },
+  "Gisler|Upper": { instr: 1574, nonInstr: 215, total: 1789 },
+  "Masuda|All": { instr: 1608, nonInstr: 254, total: 1862 },
+  "Newland|Lower": { instr: 1440, nonInstr: 215, total: 1655 },
+  "Newland|Upper": { instr: 1580, nonInstr: 215, total: 1795 },
+  "Oka|Lower": { instr: 1412, nonInstr: 260, total: 1672 },
+  "Oka|Upper": { instr: 1574, nonInstr: 260, total: 1834 },
+  "Plavan|Lower": { instr: 1413, nonInstr: 260, total: 1673 },
+  "Plavan|Upper": { instr: 1575, nonInstr: 260, total: 1835 },
+  "Talbert|All": { instr: 1595, nonInstr: 254, total: 1849 },
+  "Tamura|Lower": { instr: 1413, nonInstr: 240, total: 1653 },
+  "Tamura|Upper": { instr: 1575, nonInstr: 240, total: 1815 },
 };
 
 const locationInsideOutside = {
@@ -213,7 +227,9 @@ const freqToWeekly = (mins, freq) => {
 const elSchool = document.getElementById("school");
 const elGrade = document.getElementById("grade");
 const elBand = document.getElementById("band");
-const elWeekly = document.getElementById("weeklyInstr");
+const elWeeklyInstr = document.getElementById("weeklyInstr"); // reference only
+const elTotalSchool = document.getElementById("totalSchool");
+const elNonInstr = document.getElementById("nonInstr");
 const elServices = document.getElementById("services");
 const elMsg = document.getElementById("message");
 const elPct = document.getElementById("genEdPct");
@@ -223,7 +239,7 @@ const btnAddRow = document.getElementById("addRow");
 const btnClear = document.getElementById("clear");
 const btnCopy = document.getElementById("copy");
 
-const uniqueSchools = [...new Set(Object.keys(weeklyMinutesBySchoolBand).map(k => k.split("|")[0]))].sort();
+const uniqueSchools = [...new Set(Object.keys(minutesBySchoolBand).map(k => k.split("|")[0]))].sort();
 
 // Add blank "Select school..." option first
 const blankSchool = document.createElement("option");
@@ -253,14 +269,14 @@ function gradeToBand(g) {
   return "";
 }
 
-function getWeeklyInstr() {
+function getMinutes() {
   const school = elSchool.value;
   const grade = elGrade.value;
   if (!school || !grade) return null;
   const band = gradeToBand(grade);
   if (!band) return null;
   const key = `${school}|${band}`;
-  return weeklyMinutesBySchoolBand[key] ?? null;
+  return minutesBySchoolBand[key] ?? null;
 }
 
 function addServiceRow(initial = {}) {
@@ -363,7 +379,7 @@ function addServiceRow(initial = {}) {
 
 function setButtonsEnabled(enabled) {
   btnAddRow.disabled = !enabled;
-  btnCopy.disabled = !enabled; // copying summary is still okay without school/grade, but keeping consistent
+  btnCopy.disabled = !enabled; // still ok without selection, but keeping consistent
 }
 
 function recalc() {
@@ -372,19 +388,21 @@ function recalc() {
 
   elBand.textContent = band || "—";
 
-  const weeklyInstr = getWeeklyInstr();
-  if (weeklyInstr == null) {
-    elWeekly.textContent = "—";
-  } else {
-    elWeekly.textContent = weeklyInstr;
-  }
+  const mins = getMinutes();
+  const weeklyInstr = mins?.instr ?? null;     // reference only
+  const nonInstr = mins?.nonInstr ?? null;     // counts as Gen Ed participation time
+  const totalSchool = mins?.total ?? null;     // NEW overall total
 
-  // If school/grade not selected yet, show placeholders and skip warnings/percent
+  elWeeklyInstr.textContent = (weeklyInstr == null) ? "—" : weeklyInstr;
+  elNonInstr.textContent = (nonInstr == null) ? "—" : nonInstr;
+  elTotalSchool.textContent = (totalSchool == null) ? "—" : totalSchool;
+
+  // Ready state
   const schoolReady = Boolean(elSchool.value);
   const gradeReady = Boolean(elGrade.value);
-  const ready = schoolReady && gradeReady && weeklyInstr != null;
+  const ready = schoolReady && gradeReady && totalSchool != null;
 
-  setButtonsEnabled(true); // keep add-row available even before selection (change to `ready` if you want)
+  setButtonsEnabled(true); // keep add-row available even before selection
 
   // Sum totals
   let totalWeekly = 0;
@@ -405,12 +423,17 @@ function recalc() {
 
   // Messages
   elMsg.innerHTML = "";
-  if (ready && totalWeekly > weeklyInstr) {
+  if (ready && outsideWeekly > totalSchool) {
     const div = document.createElement("div");
     div.className = "warn";
-    div.textContent = "WARNING TOTAL: SERVICE MINUTES EXCEED INSTRUCTIONAL MINUTES AT SCHOOL!";
+    div.textContent = "WARNING: OUTSIDE SERVICE MINUTES EXCEED TOTAL SCHOOL MINUTES!";
     elMsg.appendChild(div);
-  } else if (ready && totalWeekly > 0) {
+  } else if (ready && totalWeekly > totalSchool) {
+    const div = document.createElement("div");
+    div.className = "warn";
+    div.textContent = "WARNING: TOTAL SERVICE MINUTES EXCEED TOTAL SCHOOL MINUTES (check for overlaps).";
+    elMsg.appendChild(div);
+  } else if (ready && (totalWeekly > 0 || outsideWeekly > 0)) {
     const div = document.createElement("div");
     div.className = "ok";
     div.textContent = "Totals look valid.";
@@ -420,7 +443,7 @@ function recalc() {
   }
 
   // Gen Ed %
-  if (!ready || weeklyInstr === 0) {
+  if (!ready || totalSchool === 0) {
     elPct.textContent = "—";
     elBreakdown.textContent = (!schoolReady || !gradeReady)
       ? "Select a school and grade to calculate Gen Ed %."
@@ -428,12 +451,20 @@ function recalc() {
     return;
   }
 
-  const genEd = Math.max(0, Math.min(1, 1 - (outsideWeekly / weeklyInstr)));
+  // NEW LOGIC:
+  // - TotalSchoolMinutes is the denominator
+  // - Non-instructional time is included in Gen Ed participation automatically
+  // - Only Outside services reduce Gen Ed participation
+  const genEd = Math.max(0, Math.min(1, 1 - (outsideWeekly / totalSchool)));
+  const genEdMinutes = Math.max(0, totalSchool - outsideWeekly);
+
   elPct.textContent = (genEd * 100).toFixed(2) + "%";
   elBreakdown.textContent =
     `Outside weekly mins: ${outsideWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
+    `Gen Ed mins (Total − Outside): ${genEdMinutes.toFixed(2).replace(/\.00$/,"")} • ` +
     `Total weekly service mins: ${totalWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
-    `Instructional weekly mins: ${weeklyInstr}`;
+    `Total school mins: ${totalSchool} • ` +
+    `Non-instructional (counts as Gen Ed): ${nonInstr}`;
 }
 
 btnAddRow.addEventListener("click", () => addServiceRow());
@@ -455,7 +486,12 @@ btnCopy.addEventListener("click", async () => {
   const school = elSchool.value || "(not selected)";
   const grade = elGrade.value || "(not selected)";
   const band = gradeToBand(elGrade.value) || "(not selected)";
-  const weeklyInstr = getWeeklyInstr();
+
+  const mins = getMinutes();
+  const weeklyInstr = mins?.instr ?? null; // reference
+  const nonInstr = mins?.nonInstr ?? null;
+  const totalSchool = mins?.total ?? null;
+
   const pct = elPct.textContent;
 
   const lines = [];
@@ -474,7 +510,11 @@ btnCopy.addEventListener("click", async () => {
 `Gen Ed % Calculator Summary
 School: ${school}
 Grade: ${grade} (Band: ${band})
-Weekly Instructional Minutes: ${weeklyInstr ?? "—"}
+
+Total School Minutes (overall): ${totalSchool ?? "—"}
+Non-Instructional Minutes (counts as Gen Ed): ${nonInstr ?? "—"}
+Weekly Instructional Minutes (reference only): ${weeklyInstr ?? "—"}
+
 Gen Ed %: ${pct}
 
 Services:
