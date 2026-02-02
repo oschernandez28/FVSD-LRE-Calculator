@@ -157,9 +157,7 @@ const serviceCodes = [
 ];
 
 // Key: `${school}|${band}` band = Lower / Upper / All
-// NOTE: calculations use `total` as the new overall total.
-// Non-instructional minutes are counted as Gen Ed participation time automatically
-// because we subtract ONLY Outside service minutes from Total School Minutes.
+// CALC USES: total (overall minutes) and outside service mins only.
 const minutesBySchoolBand = {
   "Courreges|Lower": { instr: 1412, nonInstr: 260, total: 1672 },
   "Courreges|Upper": { instr: 1574, nonInstr: 260, total: 1834 },
@@ -275,8 +273,7 @@ function getMinutes() {
   if (!school || !grade) return null;
   const band = gradeToBand(grade);
   if (!band) return null;
-  const key = `${school}|${band}`;
-  return minutesBySchoolBand[key] ?? null;
+  return minutesBySchoolBand[`${school}|${band}`] ?? null;
 }
 
 function addServiceRow(initial = {}) {
@@ -379,30 +376,28 @@ function addServiceRow(initial = {}) {
 
 function setButtonsEnabled(enabled) {
   btnAddRow.disabled = !enabled;
-  btnCopy.disabled = !enabled; // still ok without selection, but keeping consistent
+  btnCopy.disabled = !enabled;
 }
 
 function recalc() {
   const grade = elGrade.value;
   const band = gradeToBand(grade);
-
   elBand.textContent = band || "—";
 
   const mins = getMinutes();
-  const weeklyInstr = mins?.instr ?? null;     // reference only
-  const nonInstr = mins?.nonInstr ?? null;     // counts as Gen Ed participation time
-  const totalSchool = mins?.total ?? null;     // NEW overall total
+  const weeklyInstr = mins?.instr ?? null;   // reference only
+  const nonInstr = mins?.nonInstr ?? null;
+  const totalSchool = mins?.total ?? null;   // NEW denominator
 
   elWeeklyInstr.textContent = (weeklyInstr == null) ? "—" : weeklyInstr;
   elNonInstr.textContent = (nonInstr == null) ? "—" : nonInstr;
   elTotalSchool.textContent = (totalSchool == null) ? "—" : totalSchool;
 
-  // Ready state
   const schoolReady = Boolean(elSchool.value);
   const gradeReady = Boolean(elGrade.value);
   const ready = schoolReady && gradeReady && totalSchool != null;
 
-  setButtonsEnabled(true); // keep add-row available even before selection
+  setButtonsEnabled(true);
 
   // Sum totals
   let totalWeekly = 0;
@@ -438,8 +433,6 @@ function recalc() {
     div.className = "ok";
     div.textContent = "Totals look valid.";
     elMsg.appendChild(div);
-  } else if (!schoolReady || !gradeReady) {
-    // no message until they select school + grade
   }
 
   // Gen Ed %
@@ -451,10 +444,7 @@ function recalc() {
     return;
   }
 
-  // NEW LOGIC:
-  // - TotalSchoolMinutes is the denominator
-  // - Non-instructional time is included in Gen Ed participation automatically
-  // - Only Outside services reduce Gen Ed participation
+  // *** CRITICAL: denominator is TOTAL SCHOOL minutes ***
   const genEd = Math.max(0, Math.min(1, 1 - (outsideWeekly / totalSchool)));
   const genEdMinutes = Math.max(0, totalSchool - outsideWeekly);
 
@@ -470,15 +460,11 @@ function recalc() {
 btnAddRow.addEventListener("click", () => addServiceRow());
 
 btnClear.addEventListener("click", () => {
-  // Reset school/grade to blank
   elSchool.value = "";
   elGrade.value = "";
-
-  // Clear service rows and add a couple blank ones
   elServices.innerHTML = "";
   addServiceRow();
   addServiceRow();
-
   recalc();
 });
 
@@ -488,7 +474,7 @@ btnCopy.addEventListener("click", async () => {
   const band = gradeToBand(elGrade.value) || "(not selected)";
 
   const mins = getMinutes();
-  const weeklyInstr = mins?.instr ?? null; // reference
+  const weeklyInstr = mins?.instr ?? null;
   const nonInstr = mins?.nonInstr ?? null;
   const totalSchool = mins?.total ?? null;
 
@@ -531,7 +517,7 @@ ${lines.length ? lines.join("\n") : "(none)"}\n`;
 elSchool.addEventListener("change", recalc);
 elGrade.addEventListener("change", recalc);
 
-// init: start blank school + blank grade
+// init
 elSchool.value = "";
 elGrade.value = "";
 addServiceRow();
