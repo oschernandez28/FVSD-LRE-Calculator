@@ -416,24 +416,32 @@ function recalc() {
     if (status === "Outside") outsideWeekly += wk;
   });
 
-  // Messages
-  elMsg.innerHTML = "";
-  if (ready && outsideWeekly > totalSchool) {
-    const div = document.createElement("div");
-    div.className = "warn";
-    div.textContent = "WARNING: OUTSIDE SERVICE MINUTES EXCEED TOTAL SCHOOL MINUTES!";
-    elMsg.appendChild(div);
-  } else if (ready && totalWeekly > totalSchool) {
-    const div = document.createElement("div");
-    div.className = "warn";
-    div.textContent = "WARNING: TOTAL SERVICE MINUTES EXCEED TOTAL SCHOOL MINUTES (check for overlaps).";
-    elMsg.appendChild(div);
-  } else if (ready && (totalWeekly > 0 || outsideWeekly > 0)) {
-    const div = document.createElement("div");
-    div.className = "ok";
-    div.textContent = "Totals look valid.";
-    elMsg.appendChild(div);
-  }
+// Messages (VALIDATION)
+// Services happen only during instructional time, so they must fit within weeklyInstr.
+// Gen Ed % still uses totalSchool as the denominator.
+elMsg.innerHTML = "";
+
+if (ready && weeklyInstr != null && totalWeekly > weeklyInstr) {
+  const div = document.createElement("div");
+  div.className = "warn";
+  div.textContent =
+    "WARNING: TOTAL SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES! " +
+    "Services must occur during instructional time.";
+  elMsg.appendChild(div);
+} else if (ready && weeklyInstr != null && outsideWeekly > weeklyInstr) {
+  const div = document.createElement("div");
+  div.className = "warn";
+  div.textContent =
+    "WARNING: OUTSIDE SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES!";
+  elMsg.appendChild(div);
+} else if (ready && (totalWeekly > 0 || outsideWeekly > 0)) {
+  const div = document.createElement("div");
+  div.className = "ok";
+  div.textContent = "Totals look valid.";
+  elMsg.appendChild(div);
+}
+
+  
 
   // Gen Ed %
   if (!ready || totalSchool === 0) {
@@ -450,12 +458,11 @@ function recalc() {
 
   elPct.textContent = (genEd * 100).toFixed(2) + "%";
   elBreakdown.textContent =
-    `Outside weekly mins: ${outsideWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
-    `Gen Ed mins (Total − Outside): ${genEdMinutes.toFixed(2).replace(/\.00$/,"")} • ` +
-    `Total weekly service mins: ${totalWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
-    `Total school mins: ${totalSchool} • ` +
-    `Non-instructional (counts as Gen Ed): ${nonInstr}`;
-}
+  `Outside weekly mins: ${outsideWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
+  `Total weekly service mins: ${totalWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
+  `Weekly instructional mins (service cap): ${weeklyInstr ?? "—"} • ` +
+  `Total school mins (Gen Ed % denominator): ${totalSchool} • ` +
+  `Non-instructional (counts as Gen Ed): ${nonInstr}`;
 
 btnAddRow.addEventListener("click", () => addServiceRow());
 
