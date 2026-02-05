@@ -66,14 +66,14 @@
         <div id="band" class="muted">—</div>
       </div>
       <div>
-        <label>Weekly Instructional Minutes (reference only)</label>
+        <label>Weekly Instructional Minutes (service cap)</label>
         <div id="weeklyInstr" class="muted">—</div>
       </div>
     </div>
 
     <div class="row">
       <div>
-        <label>Total School Minutes (NEW overall total)</label>
+        <label>Total School Minutes (Gen Ed % denominator)</label>
         <div id="totalSchool" class="muted">—</div>
       </div>
       <div>
@@ -157,7 +157,8 @@ const serviceCodes = [
 ];
 
 // Key: `${school}|${band}` band = Lower / Upper / All
-// CALC USES: total (overall minutes) and outside service mins only.
+// - Gen Ed % denominator: total
+// - Service cap: instr (services occur during instructional time)
 const minutesBySchoolBand = {
   "Courreges|Lower": { instr: 1412, nonInstr: 260, total: 1672 },
   "Courreges|Upper": { instr: 1574, nonInstr: 260, total: 1834 },
@@ -225,7 +226,7 @@ const freqToWeekly = (mins, freq) => {
 const elSchool = document.getElementById("school");
 const elGrade = document.getElementById("grade");
 const elBand = document.getElementById("band");
-const elWeeklyInstr = document.getElementById("weeklyInstr"); // reference only
+const elWeeklyInstr = document.getElementById("weeklyInstr");
 const elTotalSchool = document.getElementById("totalSchool");
 const elNonInstr = document.getElementById("nonInstr");
 const elServices = document.getElementById("services");
@@ -239,13 +240,11 @@ const btnCopy = document.getElementById("copy");
 
 const uniqueSchools = [...new Set(Object.keys(minutesBySchoolBand).map(k => k.split("|")[0]))].sort();
 
-// Add blank "Select school..." option first
 const blankSchool = document.createElement("option");
 blankSchool.value = "";
 blankSchool.textContent = "Select school…";
 elSchool.appendChild(blankSchool);
 
-// Then add actual schools
 for (const s of uniqueSchools) {
   const opt = document.createElement("option");
   opt.value = s; opt.textContent = s;
@@ -279,7 +278,6 @@ function getMinutes() {
 function addServiceRow(initial = {}) {
   const tr = document.createElement("tr");
 
-  // Service Code select
   const tdSvc = document.createElement("td");
   const selSvc = document.createElement("select");
   const blankSvc = document.createElement("option");
@@ -294,7 +292,6 @@ function addServiceRow(initial = {}) {
   selSvc.value = initial.service ?? "";
   tdSvc.appendChild(selSvc);
 
-  // Location select
   const tdLoc = document.createElement("td");
   const selLoc = document.createElement("select");
   const blankLoc = document.createElement("option");
@@ -309,13 +306,11 @@ function addServiceRow(initial = {}) {
   selLoc.value = initial.location ?? "";
   tdLoc.appendChild(selLoc);
 
-  // Inside/Outside pill
   const tdIO = document.createElement("td");
   const io = document.createElement("span");
   io.className = "pill";
   tdIO.appendChild(io);
 
-  // Duration input
   const tdDur = document.createElement("td");
   const inpDur = document.createElement("input");
   inpDur.type = "number";
@@ -325,7 +320,6 @@ function addServiceRow(initial = {}) {
   inpDur.value = initial.duration ?? "";
   tdDur.appendChild(inpDur);
 
-  // Frequency select
   const tdFreq = document.createElement("td");
   const selFreq = document.createElement("select");
   ["Weekly","Daily","Monthly","Yearly"].forEach(v => {
@@ -336,12 +330,10 @@ function addServiceRow(initial = {}) {
   selFreq.value = initial.freq ?? "Weekly";
   tdFreq.appendChild(selFreq);
 
-  // Weekly minutes calc
   const tdWk = document.createElement("td");
   tdWk.className = "right";
   tdWk.textContent = "0";
 
-  // Remove button
   const tdRm = document.createElement("td");
   const btnRm = document.createElement("button");
   btnRm.textContent = "✕";
@@ -374,20 +366,15 @@ function addServiceRow(initial = {}) {
   updateRow();
 }
 
-function setButtonsEnabled(enabled) {
-  btnAddRow.disabled = !enabled;
-  btnCopy.disabled = !enabled;
-}
-
 function recalc() {
   const grade = elGrade.value;
   const band = gradeToBand(grade);
   elBand.textContent = band || "—";
 
   const mins = getMinutes();
-  const weeklyInstr = mins?.instr ?? null;   // reference only
+  const weeklyInstr = mins?.instr ?? null; // service cap
   const nonInstr = mins?.nonInstr ?? null;
-  const totalSchool = mins?.total ?? null;   // NEW denominator
+  const totalSchool = mins?.total ?? null; // Gen Ed % denominator
 
   elWeeklyInstr.textContent = (weeklyInstr == null) ? "—" : weeklyInstr;
   elNonInstr.textContent = (nonInstr == null) ? "—" : nonInstr;
@@ -395,9 +382,7 @@ function recalc() {
 
   const schoolReady = Boolean(elSchool.value);
   const gradeReady = Boolean(elGrade.value);
-  const ready = schoolReady && gradeReady && totalSchool != null;
-
-  setButtonsEnabled(true);
+  const ready = schoolReady && gradeReady && totalSchool != null && weeklyInstr != null;
 
   // Sum totals
   let totalWeekly = 0;
@@ -405,8 +390,7 @@ function recalc() {
 
   [...elServices.querySelectorAll("tr")].forEach(tr => {
     const selects = tr.querySelectorAll("select");
-    const selLoc = selects[1];
-    const loc = selLoc?.value ?? "";
+    const loc = selects[1]?.value ?? "";
     const status = loc ? (locationInsideOutside[loc] ?? "") : "";
     const dur = tr.querySelector('input[type="number"]')?.value ?? "";
     const freq = selects[2]?.value ?? "Weekly";
@@ -416,32 +400,27 @@ function recalc() {
     if (status === "Outside") outsideWeekly += wk;
   });
 
-// Messages (VALIDATION)
-// Services happen only during instructional time, so they must fit within weeklyInstr.
-// Gen Ed % still uses totalSchool as the denominator.
-elMsg.innerHTML = "";
-
-if (ready && weeklyInstr != null && totalWeekly > weeklyInstr) {
-  const div = document.createElement("div");
-  div.className = "warn";
-  div.textContent =
-    "WARNING: TOTAL SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES! " +
-    "Services must occur during instructional time.";
-  elMsg.appendChild(div);
-} else if (ready && weeklyInstr != null && outsideWeekly > weeklyInstr) {
-  const div = document.createElement("div");
-  div.className = "warn";
-  div.textContent =
-    "WARNING: OUTSIDE SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES!";
-  elMsg.appendChild(div);
-} else if (ready && (totalWeekly > 0 || outsideWeekly > 0)) {
-  const div = document.createElement("div");
-  div.className = "ok";
-  div.textContent = "Totals look valid.";
-  elMsg.appendChild(div);
-}
-
-  
+  // Messages (VALIDATION)
+  elMsg.innerHTML = "";
+  if (ready && totalWeekly > weeklyInstr) {
+    const div = document.createElement("div");
+    div.className = "warn";
+    div.textContent =
+      "WARNING: TOTAL SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES! " +
+      "Services must occur during instructional time.";
+    elMsg.appendChild(div);
+  } else if (ready && outsideWeekly > weeklyInstr) {
+    const div = document.createElement("div");
+    div.className = "warn";
+    div.textContent =
+      "WARNING: OUTSIDE SERVICE MINUTES EXCEED WEEKLY INSTRUCTIONAL MINUTES!";
+    elMsg.appendChild(div);
+  } else if (ready && (totalWeekly > 0 || outsideWeekly > 0)) {
+    const div = document.createElement("div");
+    div.className = "ok";
+    div.textContent = "Totals look valid.";
+    elMsg.appendChild(div);
+  }
 
   // Gen Ed %
   if (!ready || totalSchool === 0) {
@@ -452,18 +431,22 @@ if (ready && weeklyInstr != null && totalWeekly > weeklyInstr) {
     return;
   }
 
-  // *** CRITICAL: denominator is TOTAL SCHOOL minutes ***
+  // Denominator is TOTAL SCHOOL minutes (includes non-instructional as Gen Ed time).
+  // Only OUTSIDE services reduce Gen Ed participation.
   const genEd = Math.max(0, Math.min(1, 1 - (outsideWeekly / totalSchool)));
   const genEdMinutes = Math.max(0, totalSchool - outsideWeekly);
 
   elPct.textContent = (genEd * 100).toFixed(2) + "%";
   elBreakdown.textContent =
-  `Outside weekly mins: ${outsideWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
-  `Total weekly service mins: ${totalWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
-  `Weekly instructional mins (service cap): ${weeklyInstr ?? "—"} • ` +
-  `Total school mins (Gen Ed % denominator): ${totalSchool} • ` +
-  `Non-instructional (counts as Gen Ed): ${nonInstr}`;
+    `Outside weekly mins: ${outsideWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
+    `Total weekly service mins: ${totalWeekly.toFixed(2).replace(/\.00$/,"")} • ` +
+    `Weekly instructional mins (service cap): ${weeklyInstr} • ` +
+    `Gen Ed mins (Total − Outside): ${genEdMinutes.toFixed(2).replace(/\.00$/,"")} • ` +
+    `Total school mins (Gen Ed % denominator): ${totalSchool} • ` +
+    `Non-instructional (counts as Gen Ed): ${nonInstr}`;
+}
 
+// Buttons / events (OUTSIDE recalc — this was the part that got broken before)
 btnAddRow.addEventListener("click", () => addServiceRow());
 
 btnClear.addEventListener("click", () => {
@@ -504,9 +487,9 @@ btnCopy.addEventListener("click", async () => {
 School: ${school}
 Grade: ${grade} (Band: ${band})
 
-Total School Minutes (overall): ${totalSchool ?? "—"}
+Total School Minutes (denominator): ${totalSchool ?? "—"}
 Non-Instructional Minutes (counts as Gen Ed): ${nonInstr ?? "—"}
-Weekly Instructional Minutes (reference only): ${weeklyInstr ?? "—"}
+Weekly Instructional Minutes (service cap): ${weeklyInstr ?? "—"}
 
 Gen Ed %: ${pct}
 
